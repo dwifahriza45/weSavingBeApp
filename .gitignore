@@ -1,0 +1,9 @@
+# Development files
+command.md
+docker-compose.dev.yml
+Dockerfile.dev
+.env
+.air.toml
+
+# Temporary files
+tmp/
