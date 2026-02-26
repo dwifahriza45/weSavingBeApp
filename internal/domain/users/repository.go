@@ -38,7 +38,7 @@ func (r *userRepository) FindByEmail(ctx context.Context, email string) (*User, 
 func (r *userRepository) FindByUsername(ctx context.Context, username string) (*User, error) {
 	var user User
 	err := r.db.GetContext(ctx, &user,
-		"SELECT id, user_id, username, email, password FROM users WHERE username=$1",
+		"SELECT id, user_id, username, email, password_hash FROM users WHERE username=$1",
 		username,
 	)
 	if err != nil {
@@ -79,7 +79,7 @@ func (r *userRepository) CountByDate(ctx context.Context, date string) (int, err
 }
 
 func (r *userRepository) Create(ctx context.Context, user *User) error {
-	query := `INSERT INTO users (user_id, fullname, password, email, username, updated_at) VALUES ($1, $2, $3, $4, $5, NOW())`
+	query := `INSERT INTO users (user_id, fullname, password_hash, email, username, updated_at) VALUES ($1, $2, $3, $4, $5, NOW())`
 	_, err := r.db.ExecContext(ctx, query, user.USER_ID, user.Fullname, user.Password, user.Email, user.Username)
 	return err
 }
