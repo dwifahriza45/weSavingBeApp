@@ -5,33 +5,98 @@ package users
 
 import (
 	"context"
-	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/golang-migrate/migrate/v4"
+	"github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 )
 
-func setupTestDB(t *testing.T) *sqlx.DB {
+var testDB *sqlx.DB
+
+// 🔥 Run once before all tests
+func TestMain(m *testing.M) {
 	dsn := os.Getenv("TEST_DATABASE_URL")
-	fmt.Println("TEST_DATABASE_URL:", dsn)
+	if dsn == "" {
+		panic("TEST_DATABASE_URL must be set")
+	}
 
 	db, err := sqlx.Connect("postgres", dsn)
+	if err != nil {
+		panic(err)
+	}
+
+	driver, err := postgres.WithInstance(db.DB, &postgres.Config{})
+	if err != nil {
+		panic(err)
+	}
+
+	// 🔥 Resolve absolute path ke folder migrations
+	wd, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
+
+	// dari internal/domain/categories naik 3 level ke root
+	rootPath := filepath.Join(wd, "../../..")
+	migrationsPath := "file://" + filepath.Join(rootPath, "migrations")
+
+	migrator, err := migrate.NewWithDatabaseInstance(
+		migrationsPath,
+		"postgres",
+		driver,
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	// 🔥 Drop & recreate schema ONCE
+	// err = migrator.Drop()
+	// if err != nil && err != migrate.ErrNoChange {
+	// 	panic(err)
+	// }
+
+	// err = migrator.Up()
+	// if err != nil && err != migrate.ErrNoChange {
+	// 	panic(err)
+	// }
+
+	if err := migrator.Up(); err != nil && err != migrate.ErrNoChange {
+		panic(err)
+	}
+
+	testDB = db
+
+	code := m.Run()
+
+	db.Close()
+	os.Exit(code)
+}
+
+func setupTestDB(t *testing.T) *sqlx.DB {
+	_, err := testDB.Exec(`
+		TRUNCATE TABLE 
+			users,
+			categories,
+			savings,
+			category_budgets,
+			transactions,
+			salaries
+		RESTART IDENTITY CASCADE
+	`)
 	require.NoError(t, err)
 
-	// pastikan table kosong sebelum test
-	_, err = db.Exec("TRUNCATE TABLE users RESTART IDENTITY CASCADE")
-	require.NoError(t, err)
-
-	return db
+	return testDB
 }
 
 func TestUserRepository_Create_And_FindByEmail(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
 
 	repo := NewUserRepository(db)
 	ctx := context.Background()
@@ -57,7 +122,6 @@ func TestUserRepository_Create_And_FindByEmail(t *testing.T) {
 
 func TestUserRepository_Find_NotFound(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
 
 	repo := NewUserRepository(db)
 	ctx := context.Background()
@@ -68,7 +132,6 @@ func TestUserRepository_Find_NotFound(t *testing.T) {
 
 func TestUserRepository_FindByUsername(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
 
 	repo := NewUserRepository(db)
 	ctx := context.Background()
@@ -90,7 +153,6 @@ func TestUserRepository_FindByUsername(t *testing.T) {
 
 func TestUserRepository_FindByUserID(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
 
 	repo := NewUserRepository(db)
 	ctx := context.Background()
@@ -112,7 +174,6 @@ func TestUserRepository_FindByUserID(t *testing.T) {
 
 func TestUserRepository_CountByDate(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
 
 	repo := NewUserRepository(db)
 	ctx := context.Background()
@@ -145,7 +206,6 @@ func TestUserRepository_CountByDate(t *testing.T) {
 
 func TestUserRepository_Create_DuplicateEmail(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
 
 	repo := NewUserRepository(db)
 	ctx := context.Background()
