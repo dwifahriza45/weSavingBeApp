@@ -111,7 +111,7 @@ func TestCreate_ReturnsExactRepoError(t *testing.T) {
 func TestCreate_DBError(t *testing.T) {
 	mockRepo := &mockCategoriesRepo{
 		createFunc: func(ctx context.Context, category *Categories) error {
-			return errors.New("db error")
+			return errors.New("internal server error")
 		},
 	}
 
@@ -148,7 +148,7 @@ func TestGenerateCategoryID_Success(t *testing.T) {
 func TestCreate_ErrorFromGenerateCategoryID(t *testing.T) {
 	mockRepo := &mockCategoriesRepo{
 		countByDateFunc: func(ctx context.Context, date string) (int, error) {
-			return 0, errors.New("db error")
+			return 0, errors.New("internal server error")
 		},
 	}
 
@@ -166,7 +166,7 @@ func TestCreate_ErrorFromGenerateCategoryID(t *testing.T) {
 func TestGenerateCategoriesID_Error(t *testing.T) {
 	mockRepo := &mockCategoriesRepo{
 		countByDateFunc: func(ctx context.Context, date string) (int, error) {
-			return 0, errors.New("db error")
+			return 0, errors.New("internal server error")
 		},
 	}
 
