@@ -44,3 +44,8 @@ func GetUserID(r *http.Request) (string, bool) {
 	userID, ok := r.Context().Value(UserIDKey).(string)
 	return userID, ok
 }
+
+func GetUserIDFromContext(ctx context.Context) (string, bool) {
+	userID, ok := ctx.Value(UserIDKey).(string)
+	return userID, ok
+}

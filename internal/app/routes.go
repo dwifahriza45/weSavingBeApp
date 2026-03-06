@@ -3,6 +3,7 @@ package app
 import (
 	"BE_WE_SAVING/internal/app/middleware"
 	"BE_WE_SAVING/internal/domain/auth"
+	"BE_WE_SAVING/internal/domain/categories"
 	"BE_WE_SAVING/internal/domain/users"
 	"BE_WE_SAVING/internal/shared/utils"
 	"net/http"
@@ -46,10 +47,15 @@ func (s *Server) routes() {
 	// middleware
 	authMd := middleware.Auth(s.JWTSecret)
 
-	// Dependency
+	// Dependency Auth
 	authRepo := users.NewUserRepository(s.DB.DB)
 	authService := auth.NewAuthService(authRepo, s.JWTSecret)
 	authHandler := auth.NewAuthHandler(authService)
+
+	// Dependency Categories
+	categoriesRepo := categories.NewCategoriesRepository(s.DB.DB)
+	categoriesService := categories.NewCategoriesService(categoriesRepo)
+	categoriesHandler := categories.NewCategoriesHandler(categoriesService)
 
 	r.Route("/api/v1", func(r chi.Router) {
 
@@ -68,6 +74,18 @@ func (s *Server) routes() {
 			r.Post("/login", authHandler.Login)
 			r.Post("/register", authHandler.Register)
 			r.With(authMd).Get("/me", authHandler.Me)
+		})
+
+		r.Group(func(r chi.Router) {
+			r.Use(authMd)
+
+			r.Route("/categories", func(r chi.Router) {
+				r.Post("/create", categoriesHandler.Create)
+				r.Get("/all", categoriesHandler.GetAll)
+				r.Get("/{id}", categoriesHandler.GetByCategoryID)
+				r.Put("/{id}", categoriesHandler.Update)
+				r.Delete("/{id}", categoriesHandler.Delete)
+			})
 		})
 	})
 

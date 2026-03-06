@@ -1,9 +1,15 @@
 # Development files
 command.md
 docker-compose.dev.yml
+docker-compose.test.yml
 Dockerfile.dev
 .env
 .air.toml
 
 # Temporary files
 tmp/
+
+# Go coverage
+cover.out
+*.coverprofile
+coverage.out
