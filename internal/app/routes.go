@@ -2,9 +2,6 @@ package app
 
 import (
 	"BE_WE_SAVING/internal/app/middleware"
-	"BE_WE_SAVING/internal/domain/auth"
-	"BE_WE_SAVING/internal/domain/categories"
-	"BE_WE_SAVING/internal/domain/users"
 	"BE_WE_SAVING/internal/shared/utils"
 	"net/http"
 
@@ -13,12 +10,32 @@ import (
 )
 
 func (s *Server) routes() {
-	r := s.Router
+	s.Router.Use(corsMiddleware())
 
-	// =====================
-	// CORS FOR WEB
-	// =====================
-	r.Use(cors.Handler(cors.Options{
+	authMd := middleware.Auth(s.JWTSecret)
+	handlers := s.buildRouteHandlers()
+
+	s.Router.Route("/api/v1", func(r chi.Router) {
+		r.Get("/test", func(w http.ResponseWriter, r *http.Request) {
+			utils.JSON(w, http.StatusOK, "OK", "Test OK", false, map[string]string{
+				"result": "ok",
+			})
+		})
+
+		registerAuthRoutes(r, handlers.auth, authMd)
+
+		r.Group(func(r chi.Router) {
+			r.Use(authMd)
+
+			registerCategoryRoutes(r, handlers.categories)
+			registerCategoryBudgetRoutes(r, handlers.categoriesBudget)
+			registerSalaryRoutes(r, handlers.salaries)
+		})
+	})
+}
+
+func corsMiddleware() func(http.Handler) http.Handler {
+	return cors.Handler(cors.Options{
 		AllowedOrigins: []string{
 			"http://localhost:5173", // Vite
 			"http://localhost:3000", // React CRA
@@ -42,51 +59,5 @@ func (s *Server) routes() {
 		},
 		AllowCredentials: true,
 		MaxAge:           300, // cache preflight (5 menit)
-	}))
-
-	// middleware
-	authMd := middleware.Auth(s.JWTSecret)
-
-	// Dependency Auth
-	authRepo := users.NewUserRepository(s.DB.DB)
-	authService := auth.NewAuthService(authRepo, s.JWTSecret)
-	authHandler := auth.NewAuthHandler(authService)
-
-	// Dependency Categories
-	categoriesRepo := categories.NewCategoriesRepository(s.DB.DB)
-	categoriesService := categories.NewCategoriesService(categoriesRepo)
-	categoriesHandler := categories.NewCategoriesHandler(categoriesService)
-
-	r.Route("/api/v1", func(r chi.Router) {
-
-		r.Get("/test", func(w http.ResponseWriter, r *http.Request) {
-			utils.JSON(w, http.StatusOK, "OK", "Test OK", false, map[string]string{
-				"result": "ok",
-			})
-		})
-
-		// =====================
-		// AUTH (public + protected)
-		// =====================
-		r.Route("/auth", func(r chi.Router) {
-
-			// public
-			r.Post("/login", authHandler.Login)
-			r.Post("/register", authHandler.Register)
-			r.With(authMd).Get("/me", authHandler.Me)
-		})
-
-		r.Group(func(r chi.Router) {
-			r.Use(authMd)
-
-			r.Route("/categories", func(r chi.Router) {
-				r.Post("/create", categoriesHandler.Create)
-				r.Get("/all", categoriesHandler.GetAll)
-				r.Get("/{id}", categoriesHandler.GetByCategoryID)
-				r.Put("/{id}", categoriesHandler.Update)
-				r.Delete("/{id}", categoriesHandler.Delete)
-			})
-		})
 	})
-
 }
