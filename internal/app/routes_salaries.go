@@ -12,6 +12,7 @@ func registerSalaryRoutes(r chi.Router, salariesHandler *salaries.SalariesHandle
 		r.Get("/all", salariesHandler.GetAllByUserID)
 		r.Get("/check", salariesHandler.CheckSalary)
 		r.Get("/total", salariesHandler.GetTotalSalary)
+		r.Get("/{id}", salariesHandler.GetBySalaryID)
 		r.Put("/{id}", salariesHandler.Update)
 		r.Delete("/{id}", salariesHandler.Delete)
 	})

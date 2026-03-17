@@ -2,6 +2,7 @@ package salaries
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 
@@ -14,6 +15,7 @@ type SalariesRepository interface {
 	CheckSalary(ctx context.Context, salary *Salaries) (int, error)
 	GetTotalSalary(ctx context.Context, salary *Salaries) (int64, error)
 	GetAllByUserID(ctx context.Context, salary *Salaries) ([]*Salaries, error)
+	GetBySalaryID(ctx context.Context, salary *Salaries) (*Salaries, error)
 	Update(ctx context.Context, salary *Salaries) error
 	Delete(ctx context.Context, salaryID, userID string) error
 }
@@ -177,6 +179,47 @@ func (r *salariesRepository) GetAllByUserID(ctx context.Context, salary *Salarie
 	}
 
 	return salaries, nil
+}
+
+func (r *salariesRepository) GetBySalaryID(ctx context.Context, salary *Salaries) (*Salaries, error) {
+	if salary == nil {
+		return nil, errors.New("salary is nil")
+	}
+
+	if salary.SalaryID == "" {
+		return nil, errors.New("salary_id is required")
+	}
+
+	if salary.UserID == "" {
+		return nil, errors.New("user_id is required")
+	}
+
+	var salaryData Salaries
+
+	query := `
+		SELECT
+			id,
+			salary_id,
+			user_id,
+			amount,
+			source,
+			description,
+			received_at
+		FROM salaries
+		WHERE salary_id = $1
+		  AND user_id = $2
+	`
+
+	err := r.db.GetContext(ctx, &salaryData, query, salary.SalaryID, salary.UserID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrSalaryNotFound
+		}
+
+		return nil, err
+	}
+
+	return &salaryData, nil
 }
 
 func (r *salariesRepository) Update(ctx context.Context, salary *Salaries) error {

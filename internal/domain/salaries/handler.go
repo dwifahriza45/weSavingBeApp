@@ -135,6 +135,39 @@ func (h *SalariesHandler) GetAllByUserID(w http.ResponseWriter, r *http.Request)
 	utils.JSON(w, http.StatusOK, "OK", "Salaries fetched", false, response)
 }
 
+func (h *SalariesHandler) GetBySalaryID(w http.ResponseWriter, r *http.Request) {
+	salaryID := chi.URLParam(r, "id")
+	if salaryID == "" {
+		utils.JSONError(w, http.StatusBadRequest, "NOK", "salary id is required", true)
+		return
+	}
+
+	salary, err := h.salariesService.GetBySalaryID(r.Context(), salaryID)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrInvalidCredentials):
+			utils.JSONError(w, http.StatusUnauthorized, "NOK", err.Error(), true)
+		case errors.Is(err, ErrSalaryNotFound):
+			utils.JSONError(w, http.StatusNotFound, "NOK", err.Error(), true)
+		default:
+			utils.JSONError(w, http.StatusInternalServerError, "NOK", err.Error(), true)
+		}
+		return
+	}
+
+	response := Salaries{
+		ID:          salary.ID,
+		SalaryID:    salary.SalaryID,
+		UserID:      salary.UserID,
+		Amount:      salary.Amount,
+		Source:      salary.Source,
+		Description: salary.Description,
+		ReceivedAt:  salary.ReceivedAt,
+	}
+
+	utils.JSON(w, http.StatusOK, "OK", "Salary fetched", false, response)
+}
+
 func (h *SalariesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	var req salariesRequest
 
