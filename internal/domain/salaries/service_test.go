@@ -16,6 +16,7 @@ type mockSalariesRepo struct {
 	checkSalaryFunc func(ctx context.Context, salary *Salaries) (int, error)
 	getTotalFunc    func(ctx context.Context, salary *Salaries) (int64, error)
 	getAllFunc      func(ctx context.Context, salary *Salaries) ([]*Salaries, error)
+	getByIDFunc     func(ctx context.Context, salary *Salaries) (*Salaries, error)
 	updateFunc      func(ctx context.Context, salary *Salaries) error
 	deleteFunc      func(ctx context.Context, salaryID, userID string) error
 }
@@ -62,6 +63,14 @@ func (m *mockSalariesRepo) GetAllByUserID(ctx context.Context, salary *Salaries)
 	}
 
 	return []*Salaries{}, nil
+}
+
+func (m *mockSalariesRepo) GetBySalaryID(ctx context.Context, salary *Salaries) (*Salaries, error) {
+	if m.getByIDFunc != nil {
+		return m.getByIDFunc(ctx, salary)
+	}
+
+	return nil, nil
 }
 
 func (m *mockSalariesRepo) Update(ctx context.Context, salary *Salaries) error {
@@ -401,6 +410,86 @@ func TestGetAllSalaryByUserID_RepoError(t *testing.T) {
 	ctx := context.WithValue(context.Background(), middleware.UserIDKey, "USER-001")
 
 	result, err := service.GetAllByUserID(ctx)
+
+	assert.Nil(t, result)
+	assert.Equal(t, ErrInternal, err)
+}
+
+func TestGetBySalaryID_Success(t *testing.T) {
+	mockRepo := &mockSalariesRepo{
+		getByIDFunc: func(ctx context.Context, salary *Salaries) (*Salaries, error) {
+			assert.Equal(t, "SAL-20260317-000001", salary.SalaryID)
+			assert.Equal(t, "USER-001", salary.UserID)
+
+			return &Salaries{
+				ID:          1,
+				SalaryID:    salary.SalaryID,
+				UserID:      salary.UserID,
+				Amount:      "7500000",
+				Source:      "main job",
+				Description: "monthly salary",
+				ReceivedAt:  fixedNow().Format(time.RFC3339),
+			}, nil
+		},
+	}
+
+	service := &salariesService{
+		salaryRepo: mockRepo,
+	}
+
+	ctx := context.WithValue(context.Background(), middleware.UserIDKey, "USER-001")
+
+	result, err := service.GetBySalaryID(ctx, "SAL-20260317-000001")
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, "SAL-20260317-000001", result.SalaryID)
+}
+
+func TestGetBySalaryID_InvalidCredential(t *testing.T) {
+	service := &salariesService{
+		salaryRepo: &mockSalariesRepo{},
+	}
+
+	result, err := service.GetBySalaryID(context.Background(), "SAL-20260317-000001")
+
+	assert.Nil(t, result)
+	assert.Equal(t, ErrInvalidCredentials, err)
+}
+
+func TestGetBySalaryID_NotFound(t *testing.T) {
+	mockRepo := &mockSalariesRepo{
+		getByIDFunc: func(ctx context.Context, salary *Salaries) (*Salaries, error) {
+			return nil, ErrSalaryNotFound
+		},
+	}
+
+	service := &salariesService{
+		salaryRepo: mockRepo,
+	}
+
+	ctx := context.WithValue(context.Background(), middleware.UserIDKey, "USER-001")
+
+	result, err := service.GetBySalaryID(ctx, "SAL-20260317-000001")
+
+	assert.Nil(t, result)
+	assert.Equal(t, ErrSalaryNotFound, err)
+}
+
+func TestGetBySalaryID_RepoError(t *testing.T) {
+	mockRepo := &mockSalariesRepo{
+		getByIDFunc: func(ctx context.Context, salary *Salaries) (*Salaries, error) {
+			return nil, errors.New("db error")
+		},
+	}
+
+	service := &salariesService{
+		salaryRepo: mockRepo,
+	}
+
+	ctx := context.WithValue(context.Background(), middleware.UserIDKey, "USER-001")
+
+	result, err := service.GetBySalaryID(ctx, "SAL-20260317-000001")
 
 	assert.Nil(t, result)
 	assert.Equal(t, ErrInternal, err)

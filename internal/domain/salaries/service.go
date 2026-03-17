@@ -14,6 +14,7 @@ type SalariesService interface {
 	CheckSalary(ctx context.Context) (int, error)
 	GetTotalSalary(ctx context.Context) (int64, error)
 	GetAllByUserID(ctx context.Context) ([]*Salaries, error)
+	GetBySalaryID(ctx context.Context, salaryID string) (*Salaries, error)
 	Update(ctx context.Context, salaryID, amount, source, description string) error
 	Delete(ctx context.Context, salaryID string) error
 }
@@ -131,6 +132,27 @@ func (s *salariesService) GetAllByUserID(ctx context.Context) ([]*Salaries, erro
 	}
 
 	return salaries, nil
+}
+
+func (s *salariesService) GetBySalaryID(ctx context.Context, salaryID string) (*Salaries, error) {
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		return nil, ErrInvalidCredentials
+	}
+
+	salary, err := s.salaryRepo.GetBySalaryID(ctx, &Salaries{
+		SalaryID: salaryID,
+		UserID:   userID,
+	})
+	if err != nil {
+		if errors.Is(err, ErrSalaryNotFound) {
+			return nil, ErrSalaryNotFound
+		}
+
+		return nil, ErrInternal
+	}
+
+	return salary, nil
 }
 
 func (s *salariesService) Update(ctx context.Context, salaryID, amount, source, description string) error {

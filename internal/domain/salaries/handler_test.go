@@ -17,6 +17,7 @@ type mockSalariesService struct {
 	checkSalaryFunc func(ctx context.Context) (int, error)
 	getTotalFunc    func(ctx context.Context) (int64, error)
 	getAllFunc      func(ctx context.Context) ([]*Salaries, error)
+	getByIDFunc     func(ctx context.Context, salaryID string) (*Salaries, error)
 	updateFunc      func(ctx context.Context, salaryID, amount, source, description string) error
 	deleteFunc      func(ctx context.Context, salaryID string) error
 }
@@ -51,6 +52,14 @@ func (m *mockSalariesService) GetAllByUserID(ctx context.Context) ([]*Salaries, 
 	}
 
 	return []*Salaries{}, nil
+}
+
+func (m *mockSalariesService) GetBySalaryID(ctx context.Context, salaryID string) (*Salaries, error) {
+	if m.getByIDFunc != nil {
+		return m.getByIDFunc(ctx, salaryID)
+	}
+
+	return nil, nil
 }
 
 func (m *mockSalariesService) Update(ctx context.Context, salaryID, amount, source, description string) error {
@@ -327,6 +336,96 @@ func TestGetAllSalaryHandler_InternalError(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	handler.GetAllByUserID(rec, req)
+
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	assert.Contains(t, rec.Body.String(), "boom")
+}
+
+func TestGetBySalaryIDHandler_Success(t *testing.T) {
+	mockService := &mockSalariesService{
+		getByIDFunc: func(ctx context.Context, salaryID string) (*Salaries, error) {
+			assert.Equal(t, "SAL-20260317-000001", salaryID)
+
+			return &Salaries{
+				ID:          1,
+				SalaryID:    salaryID,
+				UserID:      "USER-001",
+				Amount:      "7500000",
+				Source:      "main job",
+				Description: "monthly salary",
+				ReceivedAt:  "2026-03-17T09:30:00+07:00",
+			}, nil
+		},
+	}
+
+	handler := NewSalariesHandler(mockService)
+	r := chi.NewRouter()
+	r.Get("/salary/{id}", handler.GetBySalaryID)
+
+	req := httptest.NewRequest(http.MethodGet, "/salary/SAL-20260317-000001", nil)
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"salary_id":"SAL-20260317-000001"`)
+}
+
+func TestGetBySalaryIDHandler_Unauthorized(t *testing.T) {
+	mockService := &mockSalariesService{
+		getByIDFunc: func(ctx context.Context, salaryID string) (*Salaries, error) {
+			return nil, ErrInvalidCredentials
+		},
+	}
+
+	handler := NewSalariesHandler(mockService)
+	r := chi.NewRouter()
+	r.Get("/salary/{id}", handler.GetBySalaryID)
+
+	req := httptest.NewRequest(http.MethodGet, "/salary/SAL-20260317-000001", nil)
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	assert.Contains(t, rec.Body.String(), ErrInvalidCredentials.Error())
+}
+
+func TestGetBySalaryIDHandler_NotFound(t *testing.T) {
+	mockService := &mockSalariesService{
+		getByIDFunc: func(ctx context.Context, salaryID string) (*Salaries, error) {
+			return nil, ErrSalaryNotFound
+		},
+	}
+
+	handler := NewSalariesHandler(mockService)
+	r := chi.NewRouter()
+	r.Get("/salary/{id}", handler.GetBySalaryID)
+
+	req := httptest.NewRequest(http.MethodGet, "/salary/SAL-20260317-000001", nil)
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Contains(t, rec.Body.String(), ErrSalaryNotFound.Error())
+}
+
+func TestGetBySalaryIDHandler_InternalError(t *testing.T) {
+	mockService := &mockSalariesService{
+		getByIDFunc: func(ctx context.Context, salaryID string) (*Salaries, error) {
+			return nil, errors.New("boom")
+		},
+	}
+
+	handler := NewSalariesHandler(mockService)
+	r := chi.NewRouter()
+	r.Get("/salary/{id}", handler.GetBySalaryID)
+
+	req := httptest.NewRequest(http.MethodGet, "/salary/SAL-20260317-000001", nil)
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	assert.Contains(t, rec.Body.String(), "boom")
