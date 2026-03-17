@@ -13,6 +13,9 @@ type SalariesService interface {
 	Create(ctx context.Context, amount, source, description string) error
 	CheckSalary(ctx context.Context) (int, error)
 	GetTotalSalary(ctx context.Context) (int64, error)
+	GetAllByUserID(ctx context.Context) ([]*Salaries, error)
+	Update(ctx context.Context, salaryID, amount, source, description string) error
+	Delete(ctx context.Context, salaryID string) error
 }
 
 type salariesService struct {
@@ -31,6 +34,7 @@ var (
 	ErrInvalidCredentials = errors.New("Invalid Credentials")
 	ErrInvalidAmount      = errors.New("amount must be a valid integer")
 	ErrInternal           = errors.New("internal server error")
+	ErrSalaryNotFound     = errors.New("salary not found")
 )
 
 func (s *salariesService) Create(ctx context.Context, amount, source, description string) error {
@@ -108,6 +112,74 @@ func (s *salariesService) GetTotalSalary(ctx context.Context) (int64, error) {
 	}
 
 	return total, nil
+}
+
+func (s *salariesService) GetAllByUserID(ctx context.Context) ([]*Salaries, error) {
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		return nil, ErrInvalidCredentials
+	}
+
+	referenceSalary := &Salaries{
+		UserID:     userID,
+		ReceivedAt: s.currentTime().Format(time.RFC3339),
+	}
+
+	salaries, err := s.salaryRepo.GetAllByUserID(ctx, referenceSalary)
+	if err != nil {
+		return nil, ErrInternal
+	}
+
+	return salaries, nil
+}
+
+func (s *salariesService) Update(ctx context.Context, salaryID, amount, source, description string) error {
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		return ErrInvalidCredentials
+	}
+
+	parsedAmount, err := strconv.ParseInt(amount, 10, 64)
+	if err != nil {
+		return ErrInvalidAmount
+	}
+
+	salary := &Salaries{
+		SalaryID:    salaryID,
+		UserID:      userID,
+		Amount:      strconv.FormatInt(parsedAmount, 10),
+		Source:      source,
+		Description: description,
+	}
+
+	err = s.salaryRepo.Update(ctx, salary)
+	if err != nil {
+		if errors.Is(err, ErrSalaryNotFound) {
+			return ErrSalaryNotFound
+		}
+
+		return ErrInternal
+	}
+
+	return nil
+}
+
+func (s *salariesService) Delete(ctx context.Context, salaryID string) error {
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		return ErrInvalidCredentials
+	}
+
+	err := s.salaryRepo.Delete(ctx, salaryID, userID)
+	if err != nil {
+		if errors.Is(err, ErrSalaryNotFound) {
+			return ErrSalaryNotFound
+		}
+
+		return ErrInternal
+	}
+
+	return nil
 }
 
 func (s *salariesService) generateSalaryID(ctx context.Context, receivedAt time.Time) (string, error) {
