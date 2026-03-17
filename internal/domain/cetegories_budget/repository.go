@@ -2,6 +2,7 @@ package cetegoriesbudget
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 
@@ -9,6 +10,10 @@ import (
 )
 
 type CategoriesBudgetRepository interface {
+	CountByDate(ctx context.Context, date string) (int, error)
+	Create(ctx context.Context, category *CategoriesBudget) error
+	Update(ctx context.Context, category *CategoriesBudget) error
+	GetByCategoryID(ctx context.Context, userID, categoryID string) (*CategoriesBudget, error)
 }
 
 type categoriesBudgetRepository struct {
@@ -92,8 +97,39 @@ func (r *categoriesBudgetRepository) Update(ctx context.Context, category *Categ
 	}
 
 	if rows == 0 {
-		return errors.New("category budget not found")
+		return ErrCategoryBudgetNotFound
 	}
 
 	return nil
+}
+
+func (r *categoriesBudgetRepository) GetByCategoryID(ctx context.Context, userID, categoryID string) (*CategoriesBudget, error) {
+	query := `
+		SELECT
+			id,
+			budget_id,
+			user_id,
+			category_id,
+			allocated_amount,
+			used_amount,
+			period
+		FROM
+			category_budgets
+		WHERE
+			user_id = $1
+			AND category_id = $2
+	`
+
+	var categoryBudget CategoriesBudget
+
+	err := r.db.GetContext(ctx, &categoryBudget, query, userID, categoryID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrCategoryBudgetNotFound
+		}
+
+		return nil, err
+	}
+
+	return &categoryBudget, nil
 }
