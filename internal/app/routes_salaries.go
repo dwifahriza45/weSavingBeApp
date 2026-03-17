@@ -9,7 +9,10 @@ import (
 func registerSalaryRoutes(r chi.Router, salariesHandler *salaries.SalariesHandler) {
 	r.Route("/salary", func(r chi.Router) {
 		r.Post("/create", salariesHandler.Create)
+		r.Get("/all", salariesHandler.GetAllByUserID)
 		r.Get("/check", salariesHandler.CheckSalary)
 		r.Get("/total", salariesHandler.GetTotalSalary)
+		r.Put("/{id}", salariesHandler.Update)
+		r.Delete("/{id}", salariesHandler.Delete)
 	})
 }

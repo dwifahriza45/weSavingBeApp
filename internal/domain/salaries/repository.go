@@ -13,6 +13,9 @@ type SalariesRepository interface {
 	Create(ctx context.Context, salary *Salaries) error
 	CheckSalary(ctx context.Context, salary *Salaries) (int, error)
 	GetTotalSalary(ctx context.Context, salary *Salaries) (int64, error)
+	GetAllByUserID(ctx context.Context, salary *Salaries) ([]*Salaries, error)
+	Update(ctx context.Context, salary *Salaries) error
+	Delete(ctx context.Context, salaryID, userID string) error
 }
 
 type salariesRepository struct {
@@ -135,4 +138,123 @@ func (r *salariesRepository) GetTotalSalary(ctx context.Context, salary *Salarie
 	}
 
 	return total, nil
+}
+
+func (r *salariesRepository) GetAllByUserID(ctx context.Context, salary *Salaries) ([]*Salaries, error) {
+	if salary == nil {
+		return nil, errors.New("salary is nil")
+	}
+
+	if salary.UserID == "" {
+		return nil, errors.New("user_id is required")
+	}
+
+	if salary.ReceivedAt == "" {
+		return nil, errors.New("received_at is required")
+	}
+
+	var salaries []*Salaries
+
+	query := `
+		SELECT
+			id,
+			salary_id,
+			user_id,
+			amount,
+			source,
+			description,
+			received_at
+		FROM salaries
+		WHERE user_id = $1
+		  AND received_at >= DATE_TRUNC('month', $2::timestamptz)
+		  AND received_at < DATE_TRUNC('month', $2::timestamptz) + INTERVAL '1 month'
+		ORDER BY received_at DESC, salary_id DESC
+	`
+
+	err := r.db.SelectContext(ctx, &salaries, query, salary.UserID, salary.ReceivedAt)
+	if err != nil {
+		return nil, err
+	}
+
+	return salaries, nil
+}
+
+func (r *salariesRepository) Update(ctx context.Context, salary *Salaries) error {
+	if salary == nil {
+		return errors.New("salary is nil")
+	}
+
+	if salary.SalaryID == "" {
+		return errors.New("salary_id is required")
+	}
+
+	if salary.UserID == "" {
+		return errors.New("user_id is required")
+	}
+
+	query := `
+		UPDATE salaries
+		SET amount = $1::bigint,
+		    source = $2,
+		    description = $3,
+		    updated_at = NOW()
+		WHERE salary_id = $4
+		  AND user_id = $5
+	`
+
+	result, err := r.db.ExecContext(
+		ctx,
+		query,
+		salary.Amount,
+		salary.Source,
+		salary.Description,
+		salary.SalaryID,
+		salary.UserID,
+	)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rowsAffected == 0 {
+		return ErrSalaryNotFound
+	}
+
+	return nil
+}
+
+func (r *salariesRepository) Delete(ctx context.Context, salaryID, userID string) error {
+	if salaryID == "" {
+		return errors.New("salary_id is required")
+	}
+
+	if userID == "" {
+		return errors.New("user_id is required")
+	}
+
+	query := `
+		DELETE FROM salaries
+		WHERE salary_id = $1
+		  AND user_id = $2
+	`
+
+	result, err := r.db.ExecContext(ctx, query, salaryID, userID)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rowsAffected == 0 {
+		return ErrSalaryNotFound
+	}
+
+	return nil
 }
