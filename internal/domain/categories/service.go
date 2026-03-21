@@ -30,6 +30,7 @@ func NewCategoriesService(categoryRepo CategoriesRepository) CategoriesService {
 var (
 	ErrInvalidCredentials = errors.New("Invalid Credentials")
 	ErrCategoryNotFound   = errors.New("category not found")
+	ErrCategoryHasBudget  = errors.New("category cannot be deleted because it is still used in category budgets")
 	ErrInternal           = errors.New("internal server error")
 )
 
@@ -136,7 +137,16 @@ func (s *categoriesService) Delete(ctx context.Context, categoryID string) error
 		return ErrInvalidCredentials
 	}
 
-	err := s.categoryRepo.Delete(ctx, categoryID, userID)
+	hasBudget, err := s.categoryRepo.HasCategoryBudget(ctx, categoryID, userID)
+	if err != nil {
+		return ErrInternal
+	}
+
+	if hasBudget {
+		return ErrCategoryHasBudget
+	}
+
+	err = s.categoryRepo.Delete(ctx, categoryID, userID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrCategoryNotFound

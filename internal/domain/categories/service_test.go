@@ -11,12 +11,13 @@ import (
 )
 
 type mockCategoriesRepo struct {
-	countByDateFunc     func(ctx context.Context, date string) (int, error)
-	createFunc          func(ctx context.Context, categories *Categories) error
-	getAllByUserIDFunc  func(ctx context.Context, userID string) ([]*Categories, error)
-	getByCategoryIDFunc func(ctx context.Context, userID, categoryID string) (*Categories, error)
-	updateFunc          func(ctx context.Context, categories *Categories) error
-	deleteFunc          func(ctx context.Context, categoryID string, userID string) error
+	countByDateFunc       func(ctx context.Context, date string) (int, error)
+	createFunc            func(ctx context.Context, categories *Categories) error
+	getAllByUserIDFunc    func(ctx context.Context, userID string) ([]*Categories, error)
+	getByCategoryIDFunc   func(ctx context.Context, userID, categoryID string) (*Categories, error)
+	hasCategoryBudgetFunc func(ctx context.Context, categoryID string, userID string) (bool, error)
+	updateFunc            func(ctx context.Context, categories *Categories) error
+	deleteFunc            func(ctx context.Context, categoryID string, userID string) error
 }
 
 func (m *mockCategoriesRepo) CountByDate(ctx context.Context, date string) (int, error) {
@@ -45,6 +46,13 @@ func (m *mockCategoriesRepo) GetByCategoryID(ctx context.Context, userID, catego
 		return m.getByCategoryIDFunc(ctx, userID, categoryID)
 	}
 	return nil, nil
+}
+
+func (m *mockCategoriesRepo) HasCategoryBudget(ctx context.Context, categoryID string, userID string) (bool, error) {
+	if m.hasCategoryBudgetFunc != nil {
+		return m.hasCategoryBudgetFunc(ctx, categoryID, userID)
+	}
+	return false, nil
 }
 
 func (m *mockCategoriesRepo) Update(ctx context.Context, categories *Categories) error {
@@ -263,6 +271,11 @@ func TestCreate_InvalidCredential(t *testing.T) {
 
 func TestDelete_Success(t *testing.T) {
 	mockRepo := &mockCategoriesRepo{
+		hasCategoryBudgetFunc: func(ctx context.Context, categoryID string, userID string) (bool, error) {
+			assert.Equal(t, "CAT-20250101-000001", categoryID)
+			assert.Equal(t, "USER-001", userID)
+			return false, nil
+		},
 		deleteFunc: func(ctx context.Context, categoryID string, userID string) error {
 			assert.Equal(t, "CAT-20250101-000001", categoryID)
 			assert.Equal(t, "USER-001", userID)
@@ -295,6 +308,9 @@ func TestDelete_InvalidCredential(t *testing.T) {
 
 func TestDelete_CategoryNotFound(t *testing.T) {
 	mockRepo := &mockCategoriesRepo{
+		hasCategoryBudgetFunc: func(ctx context.Context, categoryID string, userID string) (bool, error) {
+			return false, nil
+		},
 		deleteFunc: func(ctx context.Context, categoryID string, userID string) error {
 			return sql.ErrNoRows
 		},
@@ -311,12 +327,37 @@ func TestDelete_CategoryNotFound(t *testing.T) {
 	assert.Equal(t, ErrCategoryNotFound, err)
 }
 
-func TestDelete_RepoError(t *testing.T) {
-	expectedErr := errors.New("internal server error")
-
+func TestDelete_CategoryHasBudget(t *testing.T) {
 	mockRepo := &mockCategoriesRepo{
+		hasCategoryBudgetFunc: func(ctx context.Context, categoryID string, userID string) (bool, error) {
+			assert.Equal(t, "CAT-001", categoryID)
+			assert.Equal(t, "USER-001", userID)
+			return true, nil
+		},
 		deleteFunc: func(ctx context.Context, categoryID string, userID string) error {
-			return expectedErr
+			t.Fatal("Delete should not be called when category budget still exists")
+			return nil
+		},
+	}
+
+	service := &categoriesService{
+		categoryRepo: mockRepo,
+	}
+
+	ctx := context.WithValue(context.Background(), middleware.UserIDKey, "USER-001")
+
+	err := service.Delete(ctx, "CAT-001")
+
+	assert.Equal(t, ErrCategoryHasBudget, err)
+}
+
+func TestDelete_RepoError(t *testing.T) {
+	mockRepo := &mockCategoriesRepo{
+		hasCategoryBudgetFunc: func(ctx context.Context, categoryID string, userID string) (bool, error) {
+			return false, nil
+		},
+		deleteFunc: func(ctx context.Context, categoryID string, userID string) error {
+			return errors.New("internal server error")
 		},
 	}
 
@@ -328,5 +369,23 @@ func TestDelete_RepoError(t *testing.T) {
 
 	err := service.Delete(ctx, "CAT-20250101-000001")
 
-	assert.Equal(t, expectedErr, err)
+	assert.Equal(t, ErrInternal, err)
+}
+
+func TestDelete_HasCategoryBudgetError(t *testing.T) {
+	mockRepo := &mockCategoriesRepo{
+		hasCategoryBudgetFunc: func(ctx context.Context, categoryID string, userID string) (bool, error) {
+			return false, errors.New("database error")
+		},
+	}
+
+	service := &categoriesService{
+		categoryRepo: mockRepo,
+	}
+
+	ctx := context.WithValue(context.Background(), middleware.UserIDKey, "USER-001")
+
+	err := service.Delete(ctx, "CAT-20250101-000001")
+
+	assert.Equal(t, ErrInternal, err)
 }

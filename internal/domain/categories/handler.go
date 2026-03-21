@@ -201,6 +201,8 @@ func (h *CategoriesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 			utils.JSONError(w, http.StatusNotFound, "NOK", err.Error(), true)
 		case errors.Is(err, ErrInvalidCredentials):
 			utils.JSONError(w, http.StatusUnauthorized, "NOK", err.Error(), true)
+		case errors.Is(err, ErrCategoryHasBudget):
+			utils.JSONError(w, http.StatusConflict, "NOK", err.Error(), true)
 		default:
 			utils.JSONError(w, http.StatusInternalServerError, "NOK", "Something went wrong", true)
 		}
