@@ -15,6 +15,7 @@ type CategoriesBudgetRepository interface {
 	Update(ctx context.Context, category *CategoriesBudget) error
 	Delete(ctx context.Context, category *CategoriesBudget) error
 	GetByCategoryID(ctx context.Context, userID, categoryID string) (*CategoriesBudget, error)
+	GetByBudgetID(ctx context.Context, userID, budgetID string) (*CategoriesBudget, error)
 }
 
 type categoriesBudgetRepository struct {
@@ -73,9 +74,8 @@ func (r *categoriesBudgetRepository) Update(ctx context.Context, category *Categ
 		    used_amount = $2, 
 		    updated_at = NOW() 
 		WHERE
-			category_id = $3 
-			AND user_id = $4
-			AND budget_id = $5
+			user_id = $3
+			AND budget_id = $4
 	`
 
 	result, err := r.db.ExecContext(
@@ -83,7 +83,6 @@ func (r *categoriesBudgetRepository) Update(ctx context.Context, category *Categ
 		query,
 		category.AllocatedAmount,
 		category.UsedAmount,
-		category.CATEGORY_ID,
 		category.USER_ID,
 		category.BUDGET_ID,
 	)
@@ -106,15 +105,13 @@ func (r *categoriesBudgetRepository) Update(ctx context.Context, category *Categ
 func (r *categoriesBudgetRepository) Delete(ctx context.Context, category *CategoriesBudget) error {
 	query := `
 		DELETE FROM category_budgets
-		WHERE category_id = $1
-		  AND user_id = $2
-		  AND budget_id = $3
+		WHERE user_id = $1
+		  AND budget_id = $2
 	`
 
 	result, err := r.db.ExecContext(
 		ctx,
 		query,
-		category.CATEGORY_ID,
 		category.USER_ID,
 		category.BUDGET_ID,
 	)
@@ -155,6 +152,37 @@ func (r *categoriesBudgetRepository) GetByCategoryID(ctx context.Context, userID
 	var categoryBudget CategoriesBudget
 
 	err := r.db.GetContext(ctx, &categoryBudget, query, userID, categoryID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrCategoryBudgetNotFound
+		}
+
+		return nil, err
+	}
+
+	return &categoryBudget, nil
+}
+
+func (r *categoriesBudgetRepository) GetByBudgetID(ctx context.Context, userID, budgetID string) (*CategoriesBudget, error) {
+	query := `
+		SELECT
+			id,
+			budget_id,
+			user_id,
+			category_id,
+			allocated_amount,
+			used_amount
+		FROM
+			category_budgets
+		WHERE
+			user_id = $1
+			AND budget_id = $2
+		LIMIT 1
+	`
+
+	var categoryBudget CategoriesBudget
+
+	err := r.db.GetContext(ctx, &categoryBudget, query, userID, budgetID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrCategoryBudgetNotFound

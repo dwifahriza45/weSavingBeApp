@@ -10,7 +10,7 @@ func registerCategoryBudgetRoutes(r chi.Router, categoriesBudgetHandler *cetegor
 	r.Route("/category-budgets", func(r chi.Router) {
 		r.Post("/create", categoriesBudgetHandler.Create)
 		r.Get("/category/{id}", categoriesBudgetHandler.GetByCategoryID)
-		r.Put("/category/{id}", categoriesBudgetHandler.Update)
-		r.Delete("/category/{id}", categoriesBudgetHandler.Delete)
+		r.Put("/budget/{id}", categoriesBudgetHandler.Update)
+		r.Delete("/budget/{id}", categoriesBudgetHandler.Delete)
 	})
 }
