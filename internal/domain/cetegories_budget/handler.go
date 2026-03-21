@@ -86,9 +86,9 @@ func (h *CategoriesBudgetHandler) Create(w http.ResponseWriter, r *http.Request)
 func (h *CategoriesBudgetHandler) Update(w http.ResponseWriter, r *http.Request) {
 	var req updateCategoriesBudgetRequest
 
-	categoryID := chi.URLParam(r, "id")
-	if categoryID == "" {
-		utils.JSONError(w, http.StatusBadRequest, "NOK", "category id is required", true)
+	budgetID := chi.URLParam(r, "id")
+	if budgetID == "" {
+		utils.JSONError(w, http.StatusBadRequest, "NOK", "budget id is required", true)
 		return
 	}
 
@@ -127,7 +127,7 @@ func (h *CategoriesBudgetHandler) Update(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	err := h.categoriesBudgetService.Update(r.Context(), categoryID, req.AllocatedAmount)
+	err := h.categoriesBudgetService.Update(r.Context(), budgetID, req.AllocatedAmount)
 	if err != nil {
 		switch err {
 		case ErrInvalidCredentials:
@@ -178,13 +178,13 @@ func (h *CategoriesBudgetHandler) GetByCategoryID(w http.ResponseWriter, r *http
 }
 
 func (h *CategoriesBudgetHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	categoryID := chi.URLParam(r, "id")
-	if categoryID == "" {
-		utils.JSONError(w, http.StatusBadRequest, "NOK", "category id is required", true)
+	budgetID := chi.URLParam(r, "id")
+	if budgetID == "" {
+		utils.JSONError(w, http.StatusBadRequest, "NOK", "budget id is required", true)
 		return
 	}
 
-	err := h.categoriesBudgetService.Delete(r.Context(), categoryID)
+	err := h.categoriesBudgetService.Delete(r.Context(), budgetID)
 	if err != nil {
 		switch err {
 		case ErrInvalidCredentials:

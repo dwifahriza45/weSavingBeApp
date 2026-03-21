@@ -229,8 +229,8 @@ func TestGetCategoriesBudgetByCategoryIDHandler_InternalError(t *testing.T) {
 
 func TestUpdateCategoriesBudgetHandler_Success(t *testing.T) {
 	mockService := &mockCategoriesBudgetService{
-		updateFunc: func(ctx context.Context, categoryID, allocatedAmount string) error {
-			assert.Equal(t, "CAT-001", categoryID)
+		updateFunc: func(ctx context.Context, budgetID, allocatedAmount string) error {
+			assert.Equal(t, "BUD-001", budgetID)
 			assert.Equal(t, "1500000", allocatedAmount)
 			return nil
 		},
@@ -239,13 +239,13 @@ func TestUpdateCategoriesBudgetHandler_Success(t *testing.T) {
 	handler := NewCategoriesBudgetHandler(mockService)
 
 	r := chi.NewRouter()
-	r.Put("/category-budgets/category/{id}", handler.Update)
+	r.Put("/category-budgets/budget/{id}", handler.Update)
 
 	body := `{
 		"allocated_amount": "1500000"
 	}`
 
-	req := httptest.NewRequest(http.MethodPut, "/category-budgets/category/CAT-001", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/category-budgets/budget/BUD-001", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
@@ -260,9 +260,9 @@ func TestUpdateCategoriesBudgetHandler_InvalidJSON(t *testing.T) {
 	handler := NewCategoriesBudgetHandler(mockService)
 
 	r := chi.NewRouter()
-	r.Put("/category-budgets/category/{id}", handler.Update)
+	r.Put("/category-budgets/budget/{id}", handler.Update)
 
-	req := httptest.NewRequest(http.MethodPut, "/category-budgets/category/CAT-001", strings.NewReader("{invalid json"))
+	req := httptest.NewRequest(http.MethodPut, "/category-budgets/budget/BUD-001", strings.NewReader("{invalid json"))
 	rec := httptest.NewRecorder()
 
 	r.ServeHTTP(rec, req)
@@ -275,13 +275,13 @@ func TestUpdateCategoriesBudgetHandler_ValidationError(t *testing.T) {
 	handler := NewCategoriesBudgetHandler(mockService)
 
 	r := chi.NewRouter()
-	r.Put("/category-budgets/category/{id}", handler.Update)
+	r.Put("/category-budgets/budget/{id}", handler.Update)
 
 	body := `{
 		"allocated_amount": "abc"
 	}`
 
-	req := httptest.NewRequest(http.MethodPut, "/category-budgets/category/CAT-001", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/category-budgets/budget/BUD-001", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
@@ -302,13 +302,13 @@ func TestUpdateCategoriesBudgetHandler_NotFound(t *testing.T) {
 	handler := NewCategoriesBudgetHandler(mockService)
 
 	r := chi.NewRouter()
-	r.Put("/category-budgets/category/{id}", handler.Update)
+	r.Put("/category-budgets/budget/{id}", handler.Update)
 
 	body := `{
 		"allocated_amount": "1500000"
 	}`
 
-	req := httptest.NewRequest(http.MethodPut, "/category-budgets/category/CAT-001", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/category-budgets/budget/BUD-001", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
@@ -320,8 +320,8 @@ func TestUpdateCategoriesBudgetHandler_NotFound(t *testing.T) {
 
 func TestDeleteCategoriesBudgetHandler_Success(t *testing.T) {
 	mockService := &mockCategoriesBudgetService{
-		deleteFunc: func(ctx context.Context, categoryID string) error {
-			assert.Equal(t, "CAT-001", categoryID)
+		deleteFunc: func(ctx context.Context, budgetID string) error {
+			assert.Equal(t, "BUD-001", budgetID)
 			return nil
 		},
 	}
@@ -329,9 +329,9 @@ func TestDeleteCategoriesBudgetHandler_Success(t *testing.T) {
 	handler := NewCategoriesBudgetHandler(mockService)
 
 	r := chi.NewRouter()
-	r.Delete("/category-budgets/category/{id}", handler.Delete)
+	r.Delete("/category-budgets/budget/{id}", handler.Delete)
 
-	req := httptest.NewRequest(http.MethodDelete, "/category-budgets/category/CAT-001", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/category-budgets/budget/BUD-001", nil)
 	rec := httptest.NewRecorder()
 
 	r.ServeHTTP(rec, req)
@@ -350,9 +350,9 @@ func TestDeleteCategoriesBudgetHandler_NotFound(t *testing.T) {
 	handler := NewCategoriesBudgetHandler(mockService)
 
 	r := chi.NewRouter()
-	r.Delete("/category-budgets/category/{id}", handler.Delete)
+	r.Delete("/category-budgets/budget/{id}", handler.Delete)
 
-	req := httptest.NewRequest(http.MethodDelete, "/category-budgets/category/CAT-001", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/category-budgets/budget/BUD-001", nil)
 	rec := httptest.NewRecorder()
 
 	r.ServeHTTP(rec, req)
@@ -371,9 +371,9 @@ func TestDeleteCategoriesBudgetHandler_Unauthorized(t *testing.T) {
 	handler := NewCategoriesBudgetHandler(mockService)
 
 	r := chi.NewRouter()
-	r.Delete("/category-budgets/category/{id}", handler.Delete)
+	r.Delete("/category-budgets/budget/{id}", handler.Delete)
 
-	req := httptest.NewRequest(http.MethodDelete, "/category-budgets/category/CAT-001", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/category-budgets/budget/BUD-001", nil)
 	rec := httptest.NewRecorder()
 
 	r.ServeHTTP(rec, req)
@@ -392,9 +392,9 @@ func TestDeleteCategoriesBudgetHandler_InternalError(t *testing.T) {
 	handler := NewCategoriesBudgetHandler(mockService)
 
 	r := chi.NewRouter()
-	r.Delete("/category-budgets/category/{id}", handler.Delete)
+	r.Delete("/category-budgets/budget/{id}", handler.Delete)
 
-	req := httptest.NewRequest(http.MethodDelete, "/category-budgets/category/CAT-001", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/category-budgets/budget/BUD-001", nil)
 	rec := httptest.NewRecorder()
 
 	r.ServeHTTP(rec, req)

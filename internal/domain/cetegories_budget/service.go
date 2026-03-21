@@ -12,8 +12,8 @@ import (
 type CategoriesBudgetService interface {
 	Create(ctx context.Context, categoryID, allocatedAmount string) error
 	GetByCategoryID(ctx context.Context, categoryID string) (*CategoriesBudget, error)
-	Update(ctx context.Context, categoryID, allocatedAmount string) error
-	Delete(ctx context.Context, categoryID string) error
+	Update(ctx context.Context, budgetID, allocatedAmount string) error
+	Delete(ctx context.Context, budgetID string) error
 }
 
 type categoriesBudgetService struct {
@@ -78,7 +78,7 @@ func (s *categoriesBudgetService) GetByCategoryID(ctx context.Context, categoryI
 	return categoryBudget, nil
 }
 
-func (s *categoriesBudgetService) Update(ctx context.Context, categoryID, allocatedAmount string) error {
+func (s *categoriesBudgetService) Update(ctx context.Context, budgetID, allocatedAmount string) error {
 	userID, ok := middleware.GetUserIDFromContext(ctx)
 	if !ok {
 		return ErrInvalidCredentials
@@ -88,7 +88,7 @@ func (s *categoriesBudgetService) Update(ctx context.Context, categoryID, alloca
 		return ErrInvalidAllocatedAmount
 	}
 
-	categoryBudget, err := s.categoriesBudgetRepo.GetByCategoryID(ctx, userID, categoryID)
+	categoryBudget, err := s.categoriesBudgetRepo.GetByBudgetID(ctx, userID, budgetID)
 	if err != nil {
 		switch err {
 		case ErrCategoryBudgetNotFound:
@@ -113,13 +113,13 @@ func (s *categoriesBudgetService) Update(ctx context.Context, categoryID, alloca
 	return nil
 }
 
-func (s *categoriesBudgetService) Delete(ctx context.Context, categoryID string) error {
+func (s *categoriesBudgetService) Delete(ctx context.Context, budgetID string) error {
 	userID, ok := middleware.GetUserIDFromContext(ctx)
 	if !ok {
 		return ErrInvalidCredentials
 	}
 
-	categoryBudget, err := s.categoriesBudgetRepo.GetByCategoryID(ctx, userID, categoryID)
+	categoryBudget, err := s.categoriesBudgetRepo.GetByBudgetID(ctx, userID, budgetID)
 	if err != nil {
 		switch err {
 		case ErrCategoryBudgetNotFound:
