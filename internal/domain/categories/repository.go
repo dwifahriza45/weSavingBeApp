@@ -14,6 +14,7 @@ type CategoriesRepository interface {
 	Create(ctx context.Context, categories *Categories) error
 	GetAllByUserID(ctx context.Context, userID string) ([]*Categories, error)
 	GetByCategoryID(ctx context.Context, userID, categoryID string) (*Categories, error)
+	HasCategoryBudget(ctx context.Context, categoryID string, userID string) (bool, error)
 	Update(ctx context.Context, categories *Categories) error
 	Delete(ctx context.Context, categoryID string, userID string) error
 }
@@ -140,6 +141,26 @@ func (r *categoriesRepository) Update(ctx context.Context, categories *Categorie
 	}
 
 	return nil
+}
+
+func (r *categoriesRepository) HasCategoryBudget(ctx context.Context, categoryID string, userID string) (bool, error) {
+	query := `
+		SELECT EXISTS (
+			SELECT 1
+			FROM category_budgets
+			WHERE category_id = $1
+			  AND user_id = $2
+		)
+	`
+
+	var exists bool
+
+	err := r.db.GetContext(ctx, &exists, query, categoryID, userID)
+	if err != nil {
+		return false, err
+	}
+
+	return exists, nil
 }
 
 func (r *categoriesRepository) Delete(ctx context.Context, categoryID string, userID string) error {

@@ -10,8 +10,10 @@ import (
 )
 
 type CategoriesBudgetService interface {
-	Create(ctx context.Context, categoryID, allocatedAmount, period string) error
+	Create(ctx context.Context, categoryID, allocatedAmount string) error
 	GetByCategoryID(ctx context.Context, categoryID string) (*CategoriesBudget, error)
+	Update(ctx context.Context, categoryID, allocatedAmount string) error
+	Delete(ctx context.Context, categoryID string) error
 }
 
 type categoriesBudgetService struct {
@@ -31,7 +33,7 @@ var (
 	ErrInternal               = errors.New("internal server error")
 )
 
-func (s *categoriesBudgetService) Create(ctx context.Context, categoryID, allocatedAmount, period string) error {
+func (s *categoriesBudgetService) Create(ctx context.Context, categoryID, allocatedAmount string) error {
 	userID, ok := middleware.GetUserIDFromContext(ctx)
 	if !ok {
 		return ErrInvalidCredentials
@@ -39,10 +41,6 @@ func (s *categoriesBudgetService) Create(ctx context.Context, categoryID, alloca
 
 	if _, err := strconv.ParseInt(allocatedAmount, 10, 64); err != nil {
 		return ErrInvalidAllocatedAmount
-	}
-
-	if period == "" {
-		period = "monthly"
 	}
 
 	budgetID, err := s.generateBudgetID(ctx)
@@ -56,7 +54,6 @@ func (s *categoriesBudgetService) Create(ctx context.Context, categoryID, alloca
 		CATEGORY_ID:     categoryID,
 		AllocatedAmount: allocatedAmount,
 		UsedAmount:      "0",
-		Period:          period,
 	}
 
 	return s.categoriesBudgetRepo.Create(ctx, categoryBudget)
@@ -79,6 +76,70 @@ func (s *categoriesBudgetService) GetByCategoryID(ctx context.Context, categoryI
 	}
 
 	return categoryBudget, nil
+}
+
+func (s *categoriesBudgetService) Update(ctx context.Context, categoryID, allocatedAmount string) error {
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		return ErrInvalidCredentials
+	}
+
+	if _, err := strconv.ParseInt(allocatedAmount, 10, 64); err != nil {
+		return ErrInvalidAllocatedAmount
+	}
+
+	categoryBudget, err := s.categoriesBudgetRepo.GetByCategoryID(ctx, userID, categoryID)
+	if err != nil {
+		switch err {
+		case ErrCategoryBudgetNotFound:
+			return ErrCategoryBudgetNotFound
+		default:
+			return ErrInternal
+		}
+	}
+
+	categoryBudget.AllocatedAmount = allocatedAmount
+
+	err = s.categoriesBudgetRepo.Update(ctx, categoryBudget)
+	if err != nil {
+		switch err {
+		case ErrCategoryBudgetNotFound:
+			return ErrCategoryBudgetNotFound
+		default:
+			return ErrInternal
+		}
+	}
+
+	return nil
+}
+
+func (s *categoriesBudgetService) Delete(ctx context.Context, categoryID string) error {
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		return ErrInvalidCredentials
+	}
+
+	categoryBudget, err := s.categoriesBudgetRepo.GetByCategoryID(ctx, userID, categoryID)
+	if err != nil {
+		switch err {
+		case ErrCategoryBudgetNotFound:
+			return ErrCategoryBudgetNotFound
+		default:
+			return ErrInternal
+		}
+	}
+
+	err = s.categoriesBudgetRepo.Delete(ctx, categoryBudget)
+	if err != nil {
+		switch err {
+		case ErrCategoryBudgetNotFound:
+			return ErrCategoryBudgetNotFound
+		default:
+			return ErrInternal
+		}
+	}
+
+	return nil
 }
 
 func (s *categoriesBudgetService) generateBudgetID(ctx context.Context) (string, error) {

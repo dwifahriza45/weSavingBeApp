@@ -13,6 +13,7 @@ type CategoriesBudgetRepository interface {
 	CountByDate(ctx context.Context, date string) (int, error)
 	Create(ctx context.Context, category *CategoriesBudget) error
 	Update(ctx context.Context, category *CategoriesBudget) error
+	Delete(ctx context.Context, category *CategoriesBudget) error
 	GetByCategoryID(ctx context.Context, userID, categoryID string) (*CategoriesBudget, error)
 }
 
@@ -46,8 +47,8 @@ func (r *categoriesBudgetRepository) CountByDate(ctx context.Context, date strin
 func (r *categoriesBudgetRepository) Create(ctx context.Context, category *CategoriesBudget) error {
 	query := `
 		INSERT INTO category_budgets
-		(budget_id, user_id, category_id, allocated_amount, used_amount, period)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		(budget_id, user_id, category_id, allocated_amount, used_amount, budget_date)
+		VALUES ($1, $2, $3, $4, $5, NOW())
 	`
 
 	_, err := r.db.ExecContext(
@@ -58,7 +59,6 @@ func (r *categoriesBudgetRepository) Create(ctx context.Context, category *Categ
 		category.CATEGORY_ID,
 		category.AllocatedAmount,
 		category.UsedAmount,
-		category.Period,
 	)
 
 	return err
@@ -103,6 +103,37 @@ func (r *categoriesBudgetRepository) Update(ctx context.Context, category *Categ
 	return nil
 }
 
+func (r *categoriesBudgetRepository) Delete(ctx context.Context, category *CategoriesBudget) error {
+	query := `
+		DELETE FROM category_budgets
+		WHERE category_id = $1
+		  AND user_id = $2
+		  AND budget_id = $3
+	`
+
+	result, err := r.db.ExecContext(
+		ctx,
+		query,
+		category.CATEGORY_ID,
+		category.USER_ID,
+		category.BUDGET_ID,
+	)
+	if err != nil {
+		return err
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rows == 0 {
+		return ErrCategoryBudgetNotFound
+	}
+
+	return nil
+}
+
 func (r *categoriesBudgetRepository) GetByCategoryID(ctx context.Context, userID, categoryID string) (*CategoriesBudget, error) {
 	query := `
 		SELECT
@@ -111,13 +142,14 @@ func (r *categoriesBudgetRepository) GetByCategoryID(ctx context.Context, userID
 			user_id,
 			category_id,
 			allocated_amount,
-			used_amount,
-			period
+			used_amount
 		FROM
 			category_budgets
 		WHERE
 			user_id = $1
 			AND category_id = $2
+		ORDER BY budget_date DESC, budget_id DESC
+		LIMIT 1
 	`
 
 	var categoryBudget CategoriesBudget

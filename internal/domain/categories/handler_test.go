@@ -221,3 +221,27 @@ func TestDeleteHandler_ServiceError(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
 	assert.Contains(t, rec.Body.String(), "Something went wrong")
 }
+
+func TestDeleteHandler_CategoryHasBudget(t *testing.T) {
+	mockService := &mockCategoriesService{
+		deleteFunc: func(ctx context.Context, categoryID string) error {
+			return ErrCategoryHasBudget
+		},
+	}
+
+	handler := NewCategoriesHandler(mockService)
+
+	r := chi.NewRouter()
+	r.Delete("/categories/{id}", handler.Delete)
+
+	req := httptest.NewRequest(http.MethodDelete, "/categories/CAT-001", nil)
+
+	ctx := context.WithValue(req.Context(), middleware.UserIDKey, "user123")
+	req = req.WithContext(ctx)
+
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.Contains(t, rec.Body.String(), ErrCategoryHasBudget.Error())
+}

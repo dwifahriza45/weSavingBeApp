@@ -5,9 +5,16 @@ CREATE TABLE IF NOT EXISTS category_budgets (
     category_id VARCHAR(25) NOT NULL,
     allocated_amount BIGINT NOT NULL,
     used_amount BIGINT NOT NULL DEFAULT 0,
-    period VARCHAR(10) NOT NULL DEFAULT 'monthly',
+    budget_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
-    FOREIGN KEY (category_id) REFERENCES categories(category_id) ON DELETE CASCADE
+    FOREIGN KEY (category_id) REFERENCES categories(category_id) ON DELETE CASCADE,
+    CONSTRAINT uq_category_budgets_user_category_budget_date UNIQUE (user_id, category_id, budget_date)
 );
+
+CREATE INDEX IF NOT EXISTS idx_category_budgets_user_budget_date
+    ON category_budgets (user_id, budget_date);
+
+CREATE INDEX IF NOT EXISTS idx_category_budgets_user_category_budget_date
+    ON category_budgets (user_id, category_id, budget_date);
