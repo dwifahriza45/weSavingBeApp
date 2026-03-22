@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
@@ -76,7 +77,18 @@ func (h *CategoriesBudgetHandler) Create(w http.ResponseWriter, r *http.Request)
 		req.AllocatedAmount,
 	)
 	if err != nil {
-		utils.JSONError(w, http.StatusBadRequest, "NOK", err.Error(), true)
+		switch err {
+		case ErrInvalidCredentials:
+			utils.JSONError(w, http.StatusUnauthorized, "NOK", err.Error(), true)
+		case ErrInvalidAllocatedAmount:
+			utils.JSONError(w, http.StatusBadRequest, "NOK", err.Error(), true)
+		case ErrCategoryNotFound:
+			utils.JSONError(w, http.StatusNotFound, "NOK", err.Error(), true)
+		case ErrCategoryBudgetAlreadyExists:
+			utils.JSONError(w, http.StatusConflict, "NOK", err.Error(), true)
+		default:
+			utils.JSONError(w, http.StatusBadRequest, "NOK", err.Error(), true)
+		}
 		return
 	}
 
@@ -172,9 +184,70 @@ func (h *CategoriesBudgetHandler) GetByCategoryID(w http.ResponseWriter, r *http
 		CATEGORY_ID:     categoryBudget.CATEGORY_ID,
 		AllocatedAmount: categoryBudget.AllocatedAmount,
 		UsedAmount:      categoryBudget.UsedAmount,
+		BudgetDate:      categoryBudget.BudgetDate,
+		BudgetMonth:     budgetMonthName(categoryBudget.BudgetDate),
 	}
 
 	utils.JSON(w, http.StatusOK, "OK", "Category budget fetched", false, response)
+}
+
+func (h *CategoriesBudgetHandler) GetAllByCategoryID(w http.ResponseWriter, r *http.Request) {
+	categoryID := chi.URLParam(r, "id")
+	if categoryID == "" {
+		utils.JSONError(w, http.StatusBadRequest, "NOK", "category id is required", true)
+		return
+	}
+
+	categoryBudgets, err := h.categoriesBudgetService.GetAllByCategoryID(r.Context(), categoryID)
+	if err != nil {
+		switch err {
+		case ErrInvalidCredentials:
+			utils.JSONError(w, http.StatusUnauthorized, "NOK", err.Error(), true)
+		default:
+			utils.JSONError(w, http.StatusInternalServerError, "NOK", err.Error(), true)
+		}
+		return
+	}
+
+	response := make([]CategoriesBudget, 0, len(categoryBudgets))
+
+	for _, categoryBudget := range categoryBudgets {
+		response = append(response, CategoriesBudget{
+			ID:              categoryBudget.ID,
+			BUDGET_ID:       categoryBudget.BUDGET_ID,
+			USER_ID:         categoryBudget.USER_ID,
+			CATEGORY_ID:     categoryBudget.CATEGORY_ID,
+			AllocatedAmount: categoryBudget.AllocatedAmount,
+			UsedAmount:      categoryBudget.UsedAmount,
+			BudgetDate:      categoryBudget.BudgetDate,
+			BudgetMonth:     budgetMonthName(categoryBudget.BudgetDate),
+		})
+	}
+
+	utils.JSON(w, http.StatusOK, "OK", "Category budgets fetched", false, response)
+}
+
+func budgetMonthName(budgetDate string) string {
+	layouts := []string{
+		time.RFC3339Nano,
+		time.RFC3339,
+		"2006-01-02 15:04:05.999999999-07:00",
+		"2006-01-02 15:04:05.999999999-07",
+		"2006-01-02 15:04:05.999999-07:00",
+		"2006-01-02 15:04:05.999999-07",
+		"2006-01-02 15:04:05-07:00",
+		"2006-01-02 15:04:05-07",
+		"2006-01-02",
+	}
+
+	for _, layout := range layouts {
+		parsedTime, err := time.Parse(layout, budgetDate)
+		if err == nil {
+			return parsedTime.Month().String()
+		}
+	}
+
+	return ""
 }
 
 func (h *CategoriesBudgetHandler) Delete(w http.ResponseWriter, r *http.Request) {

@@ -12,6 +12,7 @@ import (
 type CategoriesBudgetService interface {
 	Create(ctx context.Context, categoryID, allocatedAmount string) error
 	GetByCategoryID(ctx context.Context, categoryID string) (*CategoriesBudget, error)
+	GetAllByCategoryID(ctx context.Context, categoryID string) ([]*CategoriesBudget, error)
 	Update(ctx context.Context, budgetID, allocatedAmount string) error
 	Delete(ctx context.Context, budgetID string) error
 }
@@ -27,10 +28,12 @@ func NewCategoriesBudgetService(categoriesBudgetRepo CategoriesBudgetRepository)
 }
 
 var (
-	ErrInvalidCredentials     = errors.New("Invalid Credentials")
-	ErrInvalidAllocatedAmount = errors.New("allocated_amount must be a valid integer")
-	ErrCategoryBudgetNotFound = errors.New("category budget not found")
-	ErrInternal               = errors.New("internal server error")
+	ErrInvalidCredentials          = errors.New("Invalid Credentials")
+	ErrInvalidAllocatedAmount      = errors.New("allocated_amount must be a valid integer")
+	ErrCategoryNotFound            = errors.New("Category Not Found")
+	ErrCategoryBudgetAlreadyExists = errors.New("A budget for this category has already been set for this month")
+	ErrCategoryBudgetNotFound      = errors.New("category budget not found")
+	ErrInternal                    = errors.New("internal server error")
 )
 
 func (s *categoriesBudgetService) Create(ctx context.Context, categoryID, allocatedAmount string) error {
@@ -41,6 +44,24 @@ func (s *categoriesBudgetService) Create(ctx context.Context, categoryID, alloca
 
 	if _, err := strconv.ParseInt(allocatedAmount, 10, 64); err != nil {
 		return ErrInvalidAllocatedAmount
+	}
+
+	exists, err := s.categoriesBudgetRepo.CategoryExists(ctx, userID, categoryID)
+	if err != nil {
+		return ErrInternal
+	}
+
+	if !exists {
+		return ErrCategoryNotFound
+	}
+
+	hasBudgetInCurrentMonth, err := s.categoriesBudgetRepo.CategoryBudgetExistsInCurrentMonth(ctx, userID, categoryID)
+	if err != nil {
+		return ErrInternal
+	}
+
+	if hasBudgetInCurrentMonth {
+		return ErrCategoryBudgetAlreadyExists
 	}
 
 	budgetID, err := s.generateBudgetID(ctx)
@@ -76,6 +97,20 @@ func (s *categoriesBudgetService) GetByCategoryID(ctx context.Context, categoryI
 	}
 
 	return categoryBudget, nil
+}
+
+func (s *categoriesBudgetService) GetAllByCategoryID(ctx context.Context, categoryID string) ([]*CategoriesBudget, error) {
+	userID, ok := middleware.GetUserIDFromContext(ctx)
+	if !ok {
+		return nil, ErrInvalidCredentials
+	}
+
+	categoryBudgets, err := s.categoriesBudgetRepo.GetAllByCategoryID(ctx, userID, categoryID)
+	if err != nil {
+		return nil, ErrInternal
+	}
+
+	return categoryBudgets, nil
 }
 
 func (s *categoriesBudgetService) Update(ctx context.Context, budgetID, allocatedAmount string) error {
