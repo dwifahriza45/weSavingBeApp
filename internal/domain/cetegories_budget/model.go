@@ -7,4 +7,6 @@ type CategoriesBudget struct {
 	CATEGORY_ID     string `db:"category_id" json:"category_id"`
 	AllocatedAmount string `db:"allocated_amount" json:"allocated_amount"`
 	UsedAmount      string `db:"used_amount" json:"used_amount"`
+	BudgetDate      string `db:"budget_date" json:"budget_date"`
+	BudgetMonth     string `json:"budget_month,omitempty"`
 }

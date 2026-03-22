@@ -13,10 +13,11 @@ import (
 )
 
 type mockCategoriesBudgetService struct {
-	createFunc          func(ctx context.Context, categoryID, allocatedAmount string) error
-	getByCategoryIDFunc func(ctx context.Context, categoryID string) (*CategoriesBudget, error)
-	updateFunc          func(ctx context.Context, categoryID, allocatedAmount string) error
-	deleteFunc          func(ctx context.Context, categoryID string) error
+	createFunc             func(ctx context.Context, categoryID, allocatedAmount string) error
+	getByCategoryIDFunc    func(ctx context.Context, categoryID string) (*CategoriesBudget, error)
+	getAllByCategoryIDFunc func(ctx context.Context, categoryID string) ([]*CategoriesBudget, error)
+	updateFunc             func(ctx context.Context, categoryID, allocatedAmount string) error
+	deleteFunc             func(ctx context.Context, categoryID string) error
 }
 
 func (m *mockCategoriesBudgetService) Create(ctx context.Context, categoryID, allocatedAmount string) error {
@@ -33,6 +34,14 @@ func (m *mockCategoriesBudgetService) GetByCategoryID(ctx context.Context, categ
 	}
 
 	return nil, nil
+}
+
+func (m *mockCategoriesBudgetService) GetAllByCategoryID(ctx context.Context, categoryID string) ([]*CategoriesBudget, error) {
+	if m.getAllByCategoryIDFunc != nil {
+		return m.getAllByCategoryIDFunc(ctx, categoryID)
+	}
+
+	return []*CategoriesBudget{}, nil
 }
 
 func (m *mockCategoriesBudgetService) Update(ctx context.Context, categoryID, allocatedAmount string) error {
@@ -133,6 +142,54 @@ func TestCreateCategoriesBudgetHandler_ServiceError(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "failed create category budget")
 }
 
+func TestCreateCategoriesBudgetHandler_CategoryNotFound(t *testing.T) {
+	mockService := &mockCategoriesBudgetService{
+		createFunc: func(ctx context.Context, categoryID, allocatedAmount string) error {
+			return ErrCategoryNotFound
+		},
+	}
+
+	handler := NewCategoriesBudgetHandler(mockService)
+
+	body := `{
+		"category_id": "CAT-001",
+		"allocated_amount": "1000000"
+	}`
+
+	req := httptest.NewRequest(http.MethodPost, "/category-budgets/create", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	handler.Create(rec, req)
+
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Contains(t, rec.Body.String(), ErrCategoryNotFound.Error())
+}
+
+func TestCreateCategoriesBudgetHandler_AlreadyExistsInCurrentMonth(t *testing.T) {
+	mockService := &mockCategoriesBudgetService{
+		createFunc: func(ctx context.Context, categoryID, allocatedAmount string) error {
+			return ErrCategoryBudgetAlreadyExists
+		},
+	}
+
+	handler := NewCategoriesBudgetHandler(mockService)
+
+	body := `{
+		"category_id": "CAT-001",
+		"allocated_amount": "1000000"
+	}`
+
+	req := httptest.NewRequest(http.MethodPost, "/category-budgets/create", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	handler.Create(rec, req)
+
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.Contains(t, rec.Body.String(), ErrCategoryBudgetAlreadyExists.Error())
+}
+
 func TestGetCategoriesBudgetByCategoryIDHandler_Success(t *testing.T) {
 	mockService := &mockCategoriesBudgetService{
 		getByCategoryIDFunc: func(ctx context.Context, categoryID string) (*CategoriesBudget, error) {
@@ -145,6 +202,7 @@ func TestGetCategoriesBudgetByCategoryIDHandler_Success(t *testing.T) {
 				CATEGORY_ID:     "CAT-001",
 				AllocatedAmount: "1000000",
 				UsedAmount:      "250000",
+				BudgetDate:      "2026-03-22T10:00:00Z",
 			}, nil
 		},
 	}
@@ -162,6 +220,8 @@ func TestGetCategoriesBudgetByCategoryIDHandler_Success(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Contains(t, rec.Body.String(), "Category budget fetched")
 	assert.Contains(t, rec.Body.String(), `"category_id":"CAT-001"`)
+	assert.Contains(t, rec.Body.String(), `"budget_date":"2026-03-22T10:00:00Z"`)
+	assert.Contains(t, rec.Body.String(), `"budget_month":"March"`)
 }
 
 func TestGetCategoriesBudgetByCategoryIDHandler_NotFound(t *testing.T) {
@@ -219,6 +279,117 @@ func TestGetCategoriesBudgetByCategoryIDHandler_InternalError(t *testing.T) {
 	r.Get("/category-budgets/category/{id}", handler.GetByCategoryID)
 
 	req := httptest.NewRequest(http.MethodGet, "/category-budgets/category/CAT-001", nil)
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	assert.Contains(t, rec.Body.String(), "boom")
+}
+
+func TestGetAllCategoriesBudgetByCategoryIDHandler_Success(t *testing.T) {
+	mockService := &mockCategoriesBudgetService{
+		getAllByCategoryIDFunc: func(ctx context.Context, categoryID string) ([]*CategoriesBudget, error) {
+			assert.Equal(t, "CAT-001", categoryID)
+
+			return []*CategoriesBudget{
+				{
+					ID:              2,
+					BUDGET_ID:       "BUD-002",
+					USER_ID:         "USER-001",
+					CATEGORY_ID:     "CAT-001",
+					AllocatedAmount: "1500000",
+					UsedAmount:      "500000",
+					BudgetDate:      "2026-03-22T10:00:00Z",
+				},
+				{
+					ID:              1,
+					BUDGET_ID:       "BUD-001",
+					USER_ID:         "USER-001",
+					CATEGORY_ID:     "CAT-001",
+					AllocatedAmount: "1000000",
+					UsedAmount:      "250000",
+					BudgetDate:      "2026-02-22T10:00:00Z",
+				},
+			}, nil
+		},
+	}
+
+	handler := NewCategoriesBudgetHandler(mockService)
+
+	r := chi.NewRouter()
+	r.Get("/category-budgets/category/{id}/all", handler.GetAllByCategoryID)
+
+	req := httptest.NewRequest(http.MethodGet, "/category-budgets/category/CAT-001/all", nil)
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), "Category budgets fetched")
+	assert.Contains(t, rec.Body.String(), `"budget_id":"BUD-002"`)
+	assert.Contains(t, rec.Body.String(), `"budget_id":"BUD-001"`)
+	assert.Contains(t, rec.Body.String(), `"budget_date":"2026-03-22T10:00:00Z"`)
+	assert.Contains(t, rec.Body.String(), `"budget_date":"2026-02-22T10:00:00Z"`)
+	assert.Contains(t, rec.Body.String(), `"budget_month":"March"`)
+	assert.Contains(t, rec.Body.String(), `"budget_month":"February"`)
+}
+
+func TestGetAllCategoriesBudgetByCategoryIDHandler_Empty(t *testing.T) {
+	mockService := &mockCategoriesBudgetService{
+		getAllByCategoryIDFunc: func(ctx context.Context, categoryID string) ([]*CategoriesBudget, error) {
+			return []*CategoriesBudget{}, nil
+		},
+	}
+
+	handler := NewCategoriesBudgetHandler(mockService)
+
+	r := chi.NewRouter()
+	r.Get("/category-budgets/category/{id}/all", handler.GetAllByCategoryID)
+
+	req := httptest.NewRequest(http.MethodGet, "/category-budgets/category/CAT-001/all", nil)
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"data":[]`)
+}
+
+func TestGetAllCategoriesBudgetByCategoryIDHandler_Unauthorized(t *testing.T) {
+	mockService := &mockCategoriesBudgetService{
+		getAllByCategoryIDFunc: func(ctx context.Context, categoryID string) ([]*CategoriesBudget, error) {
+			return nil, ErrInvalidCredentials
+		},
+	}
+
+	handler := NewCategoriesBudgetHandler(mockService)
+
+	r := chi.NewRouter()
+	r.Get("/category-budgets/category/{id}/all", handler.GetAllByCategoryID)
+
+	req := httptest.NewRequest(http.MethodGet, "/category-budgets/category/CAT-001/all", nil)
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	assert.Contains(t, rec.Body.String(), ErrInvalidCredentials.Error())
+}
+
+func TestGetAllCategoriesBudgetByCategoryIDHandler_InternalError(t *testing.T) {
+	mockService := &mockCategoriesBudgetService{
+		getAllByCategoryIDFunc: func(ctx context.Context, categoryID string) ([]*CategoriesBudget, error) {
+			return nil, errors.New("boom")
+		},
+	}
+
+	handler := NewCategoriesBudgetHandler(mockService)
+
+	r := chi.NewRouter()
+	r.Get("/category-budgets/category/{id}/all", handler.GetAllByCategoryID)
+
+	req := httptest.NewRequest(http.MethodGet, "/category-budgets/category/CAT-001/all", nil)
 	rec := httptest.NewRecorder()
 
 	r.ServeHTTP(rec, req)

@@ -11,10 +11,13 @@ import (
 
 type CategoriesBudgetRepository interface {
 	CountByDate(ctx context.Context, date string) (int, error)
+	CategoryExists(ctx context.Context, userID, categoryID string) (bool, error)
+	CategoryBudgetExistsInCurrentMonth(ctx context.Context, userID, categoryID string) (bool, error)
 	Create(ctx context.Context, category *CategoriesBudget) error
 	Update(ctx context.Context, category *CategoriesBudget) error
 	Delete(ctx context.Context, category *CategoriesBudget) error
 	GetByCategoryID(ctx context.Context, userID, categoryID string) (*CategoriesBudget, error)
+	GetAllByCategoryID(ctx context.Context, userID, categoryID string) ([]*CategoriesBudget, error)
 	GetByBudgetID(ctx context.Context, userID, budgetID string) (*CategoriesBudget, error)
 }
 
@@ -43,6 +46,48 @@ func (r *categoriesBudgetRepository) CountByDate(ctx context.Context, date strin
 	}
 
 	return count, nil
+}
+
+func (r *categoriesBudgetRepository) CategoryExists(ctx context.Context, userID, categoryID string) (bool, error) {
+	query := `
+		SELECT EXISTS (
+			SELECT 1
+			FROM categories
+			WHERE user_id = $1
+			  AND category_id = $2
+		)
+	`
+
+	var exists bool
+
+	err := r.db.GetContext(ctx, &exists, query, userID, categoryID)
+	if err != nil {
+		return false, err
+	}
+
+	return exists, nil
+}
+
+func (r *categoriesBudgetRepository) CategoryBudgetExistsInCurrentMonth(ctx context.Context, userID, categoryID string) (bool, error) {
+	query := `
+		SELECT EXISTS (
+			SELECT 1
+			FROM category_budgets
+			WHERE user_id = $1
+			  AND category_id = $2
+			  AND budget_date >= DATE_TRUNC('month', NOW())
+			  AND budget_date < DATE_TRUNC('month', NOW()) + INTERVAL '1 month'
+		)
+	`
+
+	var exists bool
+
+	err := r.db.GetContext(ctx, &exists, query, userID, categoryID)
+	if err != nil {
+		return false, err
+	}
+
+	return exists, nil
 }
 
 func (r *categoriesBudgetRepository) Create(ctx context.Context, category *CategoriesBudget) error {
@@ -139,7 +184,8 @@ func (r *categoriesBudgetRepository) GetByCategoryID(ctx context.Context, userID
 			user_id,
 			category_id,
 			allocated_amount,
-			used_amount
+			used_amount,
+			budget_date
 		FROM
 			category_budgets
 		WHERE
@@ -163,6 +209,34 @@ func (r *categoriesBudgetRepository) GetByCategoryID(ctx context.Context, userID
 	return &categoryBudget, nil
 }
 
+func (r *categoriesBudgetRepository) GetAllByCategoryID(ctx context.Context, userID, categoryID string) ([]*CategoriesBudget, error) {
+	query := `
+		SELECT
+			id,
+			budget_id,
+			user_id,
+			category_id,
+			allocated_amount,
+			used_amount,
+			budget_date
+		FROM
+			category_budgets
+		WHERE
+			user_id = $1
+			AND category_id = $2
+		ORDER BY budget_date DESC, budget_id DESC
+	`
+
+	var categoryBudgets []*CategoriesBudget
+
+	err := r.db.SelectContext(ctx, &categoryBudgets, query, userID, categoryID)
+	if err != nil {
+		return nil, err
+	}
+
+	return categoryBudgets, nil
+}
+
 func (r *categoriesBudgetRepository) GetByBudgetID(ctx context.Context, userID, budgetID string) (*CategoriesBudget, error) {
 	query := `
 		SELECT
@@ -171,7 +245,8 @@ func (r *categoriesBudgetRepository) GetByBudgetID(ctx context.Context, userID, 
 			user_id,
 			category_id,
 			allocated_amount,
-			used_amount
+			used_amount,
+			budget_date
 		FROM
 			category_budgets
 		WHERE
